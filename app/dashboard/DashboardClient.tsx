@@ -239,7 +239,7 @@ export default function DashboardClient({ user, restaurant, stats }: Props) {
               {stat.value}
             </div>
             <div className="text-xs text-white/40 mt-0.5">{stat.label}</div>
-            {stat.highlight && stat.pendingOrders > 0 && (
+            {stat.highlight && stats.pendingOrders > 0 && (
               <div className="flex items-center gap-1 mt-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-orange-500 status-pulse" />
                 <span className="text-xs text-orange-400">Action requise</span>
