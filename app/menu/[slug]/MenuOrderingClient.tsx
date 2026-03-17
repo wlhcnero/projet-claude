@@ -88,7 +88,8 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
       setOrderStatus("success");
       setCart([]);
       setCartOpen(false);
-    } catch {
+    } catch (err) {
+      console.error("Order error:", err);
       setOrderStatus("error");
     }
   }
