@@ -326,9 +326,52 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                   </div>
                 </div>
               ))}
+
+              {/* Form inside scroll area on mobile so keyboard doesn't hide it */}
+              <div className="pt-3 space-y-4 sm:hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-700">Total</span>
+                  <span className="text-lg font-bold text-slate-900">{cartTotal.toFixed(2)} €</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600">Numéro de table <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Ex : 5, Terrasse 2…"
+                    value={tableNumber}
+                    onChange={(e) => setTableNumber(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600">Note pour la cuisine <span className="text-slate-400 font-normal">(optionnel)</span></label>
+                  <textarea
+                    placeholder="Sans oignons, allergie noix…"
+                    value={customerNotes}
+                    onChange={(e) => setCustomerNotes(e.target.value)}
+                    rows={2}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+                  />
+                </div>
+
+                {orderStatus === "error" && (
+                  <p className="text-xs text-red-500 text-center">Une erreur est survenue. Veuillez réessayer.</p>
+                )}
+
+                <button
+                  onClick={handleOrder}
+                  disabled={!tableNumber.trim() || cart.length === 0 || orderStatus === "submitting"}
+                  className="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {orderStatus === "submitting" ? "Envoi en cours…" : `Envoyer la commande — ${cartTotal.toFixed(2)} €`}
+                </button>
+              </div>
             </div>
 
-            <div className="px-5 py-5 space-y-4 border-t border-slate-100">
+            <div className="hidden sm:block px-5 py-5 space-y-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-slate-700">Total</span>
                 <span className="text-lg font-bold text-slate-900">{cartTotal.toFixed(2)} €</span>
