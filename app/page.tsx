@@ -14,11 +14,11 @@ export default function HomePage() {
             </div>
             <span className="font-semibold text-white">MenuQR Pro</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/login" className="text-sm text-slate-400 hover:text-white px-4 py-2 rounded-md transition-colors">
+          <div className="flex items-center gap-1.5">
+            <Link href="/login" className="text-sm text-slate-400 hover:text-white px-3 py-2 rounded-md transition-colors hidden sm:inline-flex">
               Connexion
             </Link>
-            <Link href="/signup" className="text-sm font-medium bg-teal-500 hover:bg-teal-400 text-white px-4 py-2 rounded-md transition-colors">
+            <Link href="/signup" className="text-sm font-medium bg-teal-500 hover:bg-teal-400 text-white px-3 py-2 rounded-md transition-colors whitespace-nowrap">
               Essai gratuit
             </Link>
           </div>

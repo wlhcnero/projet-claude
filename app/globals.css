@@ -31,10 +31,15 @@
 
 @layer base {
   * { @apply border-border; }
+  html {
+    scrollbar-gutter: stable;
+    overflow-x: hidden;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 }
 

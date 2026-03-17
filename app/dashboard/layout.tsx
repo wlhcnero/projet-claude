@@ -92,7 +92,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* Main */}
       <div className="flex-1 lg:ml-56 flex flex-col">
         {/* Mobile header */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 h-13 flex items-center justify-between h-12">
+        <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 h-12 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-teal-500 flex items-center justify-center">
               <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
