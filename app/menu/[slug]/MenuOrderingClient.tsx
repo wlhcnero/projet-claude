@@ -406,7 +406,7 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
               </div>
 
               {orderStatus === "error" && (
-                <p className="text-xs text-red-500 text-center">Une erreur est survenue. Veuillez réessayer.</p>
+                <p className="text-xs text-red-500 text-center">{orderError ?? "Erreur inconnue"}</p>
               )}
 
               <button
