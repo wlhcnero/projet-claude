@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import ImageUpload from "@/components/ImageUpload";
 
 interface ItemData {
   name: string;
@@ -16,19 +17,18 @@ interface ItemData {
 
 interface Props {
   initialData?: Partial<ItemData>;
+  restaurantId: string;
   onSubmit: (data: ItemData) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function ItemForm({ initialData, onSubmit, onCancel }: Props) {
+export default function ItemForm({ initialData, restaurantId, onSubmit, onCancel }: Props) {
   const [name, setName] = useState(initialData?.name ?? "");
-  const [description, setDescription] = useState(
-    initialData?.description ?? ""
-  );
+  const [description, setDescription] = useState(initialData?.description ?? "");
   const [price, setPrice] = useState(
     initialData?.price != null ? String(initialData.price) : ""
   );
-  const [imageUrl, setImageUrl] = useState(initialData?.image_url ?? "");
+  const [imageUrl, setImageUrl] = useState<string | null>(initialData?.image_url ?? null);
   const [available, setAvailable] = useState(initialData?.available ?? true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,13 +36,12 @@ export default function ItemForm({ initialData, onSubmit, onCancel }: Props) {
     e.preventDefault();
     if (!name.trim()) return;
     setSubmitting(true);
-
     try {
       await onSubmit({
         name: name.trim(),
         description: description.trim() || null,
         price: price !== "" ? parseFloat(price) : null,
-        image_url: imageUrl.trim() || null,
+        image_url: imageUrl,
         available,
       });
     } finally {
@@ -51,10 +50,7 @@ export default function ItemForm({ initialData, onSubmit, onCancel }: Props) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="p-4 rounded-lg border bg-white space-y-3"
-    >
+    <form onSubmit={handleSubmit} className="p-4 rounded-lg border bg-white space-y-3">
       <div className="space-y-1">
         <Label htmlFor="itemName">Nom du plat *</Label>
         <Input
@@ -103,14 +99,8 @@ export default function ItemForm({ initialData, onSubmit, onCancel }: Props) {
         </div>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="itemImage">URL de l&apos;image (optionnel)</Label>
-        <Input
-          id="itemImage"
-          type="url"
-          placeholder="https://…"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-        />
+        <Label>Image</Label>
+        <ImageUpload value={imageUrl} onChange={setImageUrl} restaurantId={restaurantId} />
       </div>
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>

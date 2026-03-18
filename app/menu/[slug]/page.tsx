@@ -3,6 +3,22 @@ import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import MenuOrderingClient from "./MenuOrderingClient";
 
+interface ItemOption {
+  id: string;
+  name: string;
+  price_delta: number;
+  position: number;
+}
+
+interface ItemOptionGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  multiple: boolean;
+  position: number;
+  item_options: ItemOption[];
+}
+
 interface MenuItem {
   id: string;
   name: string;
@@ -11,6 +27,7 @@ interface MenuItem {
   image_url: string | null;
   available: boolean;
   position: number;
+  item_option_groups: ItemOptionGroup[];
 }
 
 interface MenuCategory {
@@ -58,7 +75,7 @@ export default async function PublicMenuPage({ params, searchParams }: Props) {
 
   const { data: categories } = await supabase
     .from("categories")
-    .select("*, items(*)")
+    .select("*, items(*, item_option_groups(*, item_options(*)))")
     .eq("restaurant_id", restaurant.id)
     .order("position");
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ItemForm from "@/components/ItemForm";
+import VariantsEditor from "@/components/VariantsEditor";
 
 interface Item {
   id: string;
@@ -16,13 +17,14 @@ interface Item {
 
 interface Props {
   item: Item;
+  restaurantId: string;
   onUpdate: (
     data: Partial<Omit<Item, "id">>
   ) => Promise<void>;
   onDelete: () => Promise<void>;
 }
 
-export default function ItemCard({ item, onUpdate, onDelete }: Props) {
+export default function ItemCard({ item, restaurantId, onUpdate, onDelete }: Props) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -38,14 +40,20 @@ export default function ItemCard({ item, onUpdate, onDelete }: Props) {
 
   if (editing) {
     return (
-      <ItemForm
-        initialData={item}
-        onSubmit={async (data) => {
-          await onUpdate(data);
-          setEditing(false);
-        }}
-        onCancel={() => setEditing(false)}
-      />
+      <div>
+        <ItemForm
+          initialData={item}
+          restaurantId={restaurantId}
+          onSubmit={async (data) => {
+            await onUpdate(data);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+        <div className="mt-2 px-1">
+          <VariantsEditor itemId={item.id} />
+        </div>
+      </div>
     );
   }
 

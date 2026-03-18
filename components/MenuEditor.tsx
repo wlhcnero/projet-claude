@@ -271,6 +271,7 @@ export default function MenuEditor({ restaurant, initialCategories }: Props) {
               <CategoryCard
                 key={category.id}
                 category={category}
+                restaurantId={restaurant.id}
                 onDeleteCategory={handleDeleteCategory}
                 onUpdateCategory={handleUpdateCategory}
                 onAddItem={handleAddItem}

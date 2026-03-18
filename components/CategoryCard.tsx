@@ -26,6 +26,7 @@ interface Category {
 
 interface Props {
   category: Category;
+  restaurantId: string;
   onDeleteCategory: (id: string) => Promise<void>;
   onUpdateCategory: (id: string, name: string) => Promise<void>;
   onAddItem: (
@@ -42,6 +43,7 @@ interface Props {
 
 export default function CategoryCard({
   category,
+  restaurantId,
   onDeleteCategory,
   onUpdateCategory,
   onAddItem,
@@ -129,6 +131,7 @@ export default function CategoryCard({
           <ItemCard
             key={item.id}
             item={item}
+            restaurantId={restaurantId}
             onUpdate={(data) => onUpdateItem(category.id, item.id, data)}
             onDelete={() => onDeleteItem(category.id, item.id)}
           />
@@ -136,6 +139,7 @@ export default function CategoryCard({
 
         {showAddItem ? (
           <ItemForm
+            restaurantId={restaurantId}
             onSubmit={async (data) => {
               await onAddItem(category.id, data);
               setShowAddItem(false);
