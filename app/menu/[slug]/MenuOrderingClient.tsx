@@ -81,13 +81,13 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
         .from("orders")
         .insert({ id: newOrderId, restaurant_id: restaurant.id, table_number: tableNumber.trim(), status: "pending", total_amount: cartTotal, customer_notes: customerNotes.trim() || null });
 
-      if (insertOrderError) throw new Error(insertOrderError.message);
+      if (insertOrderError) throw new Error(`[orders] ${insertOrderError.code}: ${insertOrderError.message} — ${insertOrderError.hint ?? insertOrderError.details ?? ""}`);
 
       const { error: insertItemsError } = await supabase.from("order_items").insert(
         cart.map((item) => ({ order_id: newOrderId, item_id: item.id, item_name: item.name, item_price: item.price, quantity: item.quantity }))
       );
 
-      if (insertItemsError) throw new Error(insertItemsError.message);
+      if (insertItemsError) throw new Error(`[order_items] ${insertItemsError.code}: ${insertItemsError.message} — ${insertItemsError.hint ?? insertItemsError.details ?? ""}`);
 
       setOrderId(newOrderId);
       setOrderStatus("success");
