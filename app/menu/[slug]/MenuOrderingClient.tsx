@@ -217,21 +217,21 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                           {!unavailable && item.price !== null && (
                             <div className="flex items-center gap-1.5">
                               {qty > 0 ? (
-                                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+                                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-0.5">
                                   <button
                                     onClick={() => removeFromCart(item.id)}
-                                    className="w-6 h-6 rounded-md text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors"
+                                    className="w-9 h-9 rounded-md text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors"
                                   >
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
                                     </svg>
                                   </button>
-                                  <span className="text-xs font-bold text-slate-800 min-w-[14px] text-center">{qty}</span>
+                                  <span className="text-sm font-bold text-slate-800 min-w-[18px] text-center">{qty}</span>
                                   <button
                                     onClick={() => addToCart(item)}
-                                    className="w-6 h-6 rounded-md bg-teal-500 text-white hover:bg-teal-600 flex items-center justify-center transition-colors"
+                                    className="w-9 h-9 rounded-md bg-teal-500 text-white hover:bg-teal-600 flex items-center justify-center transition-colors"
                                   >
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
                                   </button>
@@ -239,9 +239,9 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                               ) : (
                                 <button
                                   onClick={() => addToCart(item)}
-                                  className="w-7 h-7 rounded-lg bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors"
+                                  className="w-10 h-10 rounded-lg bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors"
                                 >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                   </svg>
                                 </button>
@@ -307,9 +307,9 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                     <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
                     <p className="text-xs text-slate-400">{item.price.toFixed(2)} € / unité</p>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button onClick={() => removeFromCart(item.id)} className="w-6 h-6 rounded-md border border-slate-200 flex items-center justify-center text-slate-400 hover:border-slate-300 transition-colors">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => removeFromCart(item.id)} className="w-9 h-9 rounded-md border border-slate-200 flex items-center justify-center text-slate-400 hover:border-slate-300 transition-colors">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
                       </svg>
                     </button>
@@ -317,8 +317,8 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                     <button onClick={() => {
                       const menuItem = categories.flatMap(c => c.items).find(i => i.id === item.id);
                       if (menuItem) addToCart(menuItem);
-                    }} className="w-6 h-6 rounded-md bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    }} className="w-9 h-9 rounded-md bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
                     </button>
