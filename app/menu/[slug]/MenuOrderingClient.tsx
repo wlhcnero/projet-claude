@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase";
 
 interface MenuItem {
   id: string;
@@ -74,22 +73,30 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
     setOrderStatus("submitting");
     setOrderError(null);
     try {
-      const supabase = createClient();
-      const newOrderId = crypto.randomUUID();
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId: restaurant.id,
+          tableNumber: tableNumber.trim(),
+          totalAmount: cartTotal,
+          customerNotes: customerNotes.trim() || null,
+          items: cart.map((item) => ({
+            itemId: item.id,
+            itemName: item.name,
+            itemPrice: item.price,
+            quantity: item.quantity,
+          })),
+        }),
+      });
 
-      const { error: insertOrderError } = await supabase
-        .from("orders")
-        .insert({ id: newOrderId, restaurant_id: restaurant.id, table_number: tableNumber.trim(), status: "pending", total_amount: cartTotal, customer_notes: customerNotes.trim() || null });
+      const data = await res.json() as { orderId?: string; error?: string; code?: string; hint?: string };
 
-      if (insertOrderError) throw new Error(`[orders] ${insertOrderError.code}: ${insertOrderError.message} — ${insertOrderError.hint ?? insertOrderError.details ?? ""}`);
+      if (!res.ok) {
+        throw new Error(`[${data.code ?? res.status}] ${data.error}${data.hint ? ` — ${data.hint}` : ""}`);
+      }
 
-      const { error: insertItemsError } = await supabase.from("order_items").insert(
-        cart.map((item) => ({ order_id: newOrderId, item_id: item.id, item_name: item.name, item_price: item.price, quantity: item.quantity }))
-      );
-
-      if (insertItemsError) throw new Error(`[order_items] ${insertItemsError.code}: ${insertItemsError.message} — ${insertItemsError.hint ?? insertItemsError.details ?? ""}`);
-
-      setOrderId(newOrderId);
+      setOrderId(data.orderId ?? null);
       setOrderStatus("success");
       setCart([]);
       setCartOpen(false);
