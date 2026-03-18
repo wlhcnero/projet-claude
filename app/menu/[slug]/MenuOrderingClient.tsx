@@ -43,6 +43,7 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
   const [customerNotes, setCustomerNotes] = useState("");
   const [orderStatus, setOrderStatus] = useState<OrderStatus>("idle");
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? "");
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -71,25 +72,29 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
   async function handleOrder() {
     if (!tableNumber.trim() || cart.length === 0) return;
     setOrderStatus("submitting");
+    setOrderError(null);
     try {
       const supabase = createClient();
-      const { data: order, error: orderError } = await supabase
+      const { data: order, error: insertOrderError } = await supabase
         .from("orders")
         .insert({ restaurant_id: restaurant.id, table_number: tableNumber.trim(), status: "pending", total_amount: cartTotal, customer_notes: customerNotes.trim() || null })
         .select("id").single();
 
-      if (orderError || !order) throw orderError;
+      if (insertOrderError || !order) throw new Error(insertOrderError?.message ?? "Erreur insertion commande");
 
-      await supabase.from("order_items").insert(
+      const { error: insertItemsError } = await supabase.from("order_items").insert(
         cart.map((item) => ({ order_id: order.id, item_id: item.id, item_name: item.name, item_price: item.price, quantity: item.quantity }))
       );
+
+      if (insertItemsError) throw new Error(insertItemsError.message);
 
       setOrderId(order.id);
       setOrderStatus("success");
       setCart([]);
       setCartOpen(false);
-    } catch {
+    } catch (err) {
       setOrderStatus("error");
+      setOrderError(err instanceof Error ? err.message : "Erreur inconnue");
     }
   }
 
@@ -358,7 +363,7 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                 </div>
 
                 {orderStatus === "error" && (
-                  <p className="text-xs text-red-500 text-center">Une erreur est survenue. Veuillez réessayer.</p>
+                  <p className="text-xs text-red-500 text-center">{orderError ?? "Erreur inconnue"}</p>
                 )}
 
                 <button
