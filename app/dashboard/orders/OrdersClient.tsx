@@ -1,7 +1,51 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase";
+
+function playNotificationSound() {
+  try {
+    const ctx = new AudioContext();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+    [523, 659, 784].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.connect(gain);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      osc.start(ctx.currentTime + i * 0.16);
+      osc.stop(ctx.currentTime + i * 0.16 + 0.14);
+    });
+  } catch {
+    // AudioContext non supporté
+  }
+}
+
+function exportCSV(orders: Order[]) {
+  const headers = ["Réf.", "Table", "Statut", "Total (€)", "Notes", "Date", "Articles"];
+  const rows = orders.map((o) => [
+    o.id.slice(0, 8).toUpperCase(),
+    o.table_number,
+    STATUS_CONFIG[o.status].label,
+    Number(o.total_amount).toFixed(2),
+    o.customer_notes ?? "",
+    new Date(o.created_at).toLocaleString("fr-FR"),
+    o.order_items.map((i) => `${i.quantity}x ${i.item_name} (${Number(i.item_price).toFixed(2)}€)`).join(" | "),
+  ]);
+  const csv = [headers, ...rows]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `commandes-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 type OrderStatus = "pending" | "preparing" | "ready" | "served";
 
@@ -141,6 +185,10 @@ export default function OrdersClient({ restaurantId, initialOrders }: Props) {
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
   const [newAlert, setNewAlert] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const soundEnabledRef = useRef(true);
+
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
 
   const byStatus = (s: OrderStatus) => orders.filter((o) => o.status === s);
 
@@ -165,6 +213,7 @@ export default function OrdersClient({ restaurantId, initialOrders }: Props) {
             setOrders((prev) => [data as Order, ...prev]);
             setNewAlert(true);
             setTimeout(() => setNewAlert(false), 4000);
+            if (soundEnabledRef.current) playNotificationSound();
           }
         }
       )
@@ -195,19 +244,47 @@ export default function OrdersClient({ restaurantId, initialOrders }: Props) {
             )}
           </div>
         </div>
-        <button
-          onClick={async () => {
-            const supabase = createClient();
-            const { data } = await supabase.from("orders").select("*, order_items(*)").eq("restaurant_id", restaurantId).order("created_at", { ascending: false }).limit(50);
-            if (data) setOrders(data as Order[]);
-          }}
-          className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Actualiser
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSoundEnabled((v) => !v)}
+            title={soundEnabled ? "Désactiver le son" : "Activer le son"}
+            className={`text-xs border px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${soundEnabled ? "text-teal-600 border-teal-200 bg-teal-50 hover:bg-teal-100" : "text-slate-400 border-slate-200 hover:border-slate-300"}`}
+          >
+            {soundEnabled ? (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0l-3-3m3 3l3-3M9 12H3" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            )}
+            Son
+          </button>
+          <button
+            onClick={() => exportCSV(orders)}
+            disabled={orders.length === 0}
+            className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all disabled:opacity-40"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            CSV
+          </button>
+          <button
+            onClick={async () => {
+              const supabase = createClient();
+              const { data } = await supabase.from("orders").select("*, order_items(*)").eq("restaurant_id", restaurantId).order("created_at", { ascending: false }).limit(50);
+              if (data) setOrders(data as Order[]);
+            }}
+            className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Actualiser
+          </button>
+        </div>
       </div>
 
       {/* New order alert */}

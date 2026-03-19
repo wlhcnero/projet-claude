@@ -1,7 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+
+interface ItemOption {
+  id: string;
+  name: string;
+  price_delta: number;
+  position: number;
+}
+
+interface ItemOptionGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  multiple: boolean;
+  position: number;
+  item_options: ItemOption[];
+}
 
 interface MenuItem {
   id: string;
@@ -11,6 +27,7 @@ interface MenuItem {
   image_url: string | null;
   available: boolean;
   position: number;
+  item_option_groups: ItemOptionGroup[];
 }
 
 interface MenuCategory {
@@ -26,6 +43,8 @@ interface CartItem {
   price: number;
   quantity: number;
   image_url: string | null;
+  options: { groupName: string; optionName: string; priceDelta: number }[];
+  cartKey: string; // unique key per option combo
 }
 
 interface Props {
@@ -34,63 +53,99 @@ interface Props {
   initialTable: string;
 }
 
+
 type OrderStatus = "idle" | "submitting" | "success" | "error";
 
 export default function MenuOrderingClient({ restaurant, categories, initialTable }: Props) {
+  const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState(initialTable);
   const [customerNotes, setCustomerNotes] = useState("");
   const [orderStatus, setOrderStatus] = useState<OrderStatus>("idle");
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? "");
+  const [optionPickerItem, setOptionPickerItem] = useState<MenuItem | null>(null);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const addToCart = useCallback((item: MenuItem) => {
+  const addToCart = useCallback((item: MenuItem, selectedOptions?: { groupName: string; optionName: string; priceDelta: number }[]) => {
     if (!item.available || item.price === null) return;
+    const opts = selectedOptions ?? [];
+    const priceDelta = opts.reduce((s, o) => s + o.priceDelta, 0);
+    const finalPrice = item.price! + priceDelta;
+    const cartKey = item.id + (opts.length ? "__" + opts.map((o) => o.optionName).join("_") : "");
     setCart((prev) => {
-      const existing = prev.find((c) => c.id === item.id);
-      if (existing) return prev.map((c) => c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c);
-      return [...prev, { id: item.id, name: item.name, price: item.price!, quantity: 1, image_url: item.image_url }];
+      const existing = prev.find((c) => c.cartKey === cartKey);
+      if (existing) return prev.map((c) => c.cartKey === cartKey ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...prev, { id: item.id, name: item.name, price: finalPrice, quantity: 1, image_url: item.image_url, options: opts, cartKey }];
     });
   }, []);
 
-  const removeFromCart = useCallback((id: string) => {
+  const removeFromCart = useCallback((cartKey: string) => {
     setCart((prev) => {
-      const existing = prev.find((c) => c.id === id);
+      const existing = prev.find((c) => c.cartKey === cartKey);
       if (!existing) return prev;
-      if (existing.quantity === 1) return prev.filter((c) => c.id !== id);
-      return prev.map((c) => c.id === id ? { ...c, quantity: c.quantity - 1 } : c);
+      if (existing.quantity === 1) return prev.filter((c) => c.cartKey !== cartKey);
+      return prev.map((c) => c.cartKey === cartKey ? { ...c, quantity: c.quantity - 1 } : c);
     });
   }, []);
 
-  const getQuantity = (id: string) => cart.find((c) => c.id === id)?.quantity ?? 0;
+  const handleAddToCartOrPicker = useCallback((item: MenuItem) => {
+    if (!item.available || item.price === null) return;
+    const hasGroups = item.item_option_groups && item.item_option_groups.length > 0;
+    if (hasGroups) {
+      setOptionPickerItem(item);
+    } else {
+      addToCart(item);
+    }
+  }, [addToCart]);
+
+  const getQuantity = (id: string) => cart.filter((c) => c.id === id).reduce((s, c) => s + c.quantity, 0);
 
   async function handleOrder() {
     if (!tableNumber.trim() || cart.length === 0) return;
     setOrderStatus("submitting");
+    setOrderError(null);
     try {
-      const supabase = createClient();
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert({ restaurant_id: restaurant.id, table_number: tableNumber.trim(), status: "pending", total_amount: cartTotal, customer_notes: customerNotes.trim() || null })
-        .select("id").single();
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId: restaurant.id,
+          tableNumber: tableNumber.trim(),
+          totalAmount: cartTotal,
+          customerNotes: customerNotes.trim() || null,
+          items: cart.map((item) => ({
+            itemId: item.id,
+            itemName: item.options.length
+              ? `${item.name} (${item.options.map((o) => o.optionName).join(", ")})`
+              : item.name,
+            itemPrice: item.price,
+            quantity: item.quantity,
+          })),
+        }),
+      });
 
-      if (orderError || !order) throw orderError;
+      const data = await res.json() as { orderId?: string; error?: string; code?: string; hint?: string };
 
-      await supabase.from("order_items").insert(
-        cart.map((item) => ({ order_id: order.id, item_id: item.id, item_name: item.name, item_price: item.price, quantity: item.quantity }))
-      );
+      if (!res.ok) {
+        throw new Error(`[${data.code ?? res.status}] ${data.error}${data.hint ? ` — ${data.hint}` : ""}`);
+      }
 
-      setOrderId(order.id);
+      const newOrderId = data.orderId ?? null;
+      setOrderId(newOrderId);
       setOrderStatus("success");
       setCart([]);
       setCartOpen(false);
+      if (newOrderId) {
+        router.push(`/menu/${restaurant.slug}/suivi/${newOrderId}`);
+      }
     } catch (err) {
-      console.error("Order error:", err);
       setOrderStatus("error");
+      setOrderError(err instanceof Error ? err.message : "Erreur inconnue");
     }
   }
 
@@ -217,34 +272,43 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                           )}
                           {!unavailable && item.price !== null && (
                             <div className="flex items-center gap-1.5">
-                              {qty > 0 ? (
-                                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+                              {qty > 0 && !item.item_option_groups?.length ? (
+                                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-0.5">
                                   <button
-                                    onClick={() => removeFromCart(item.id)}
-                                    className="w-6 h-6 rounded-md text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors"
+                                    onClick={() => { const c = cart.filter((x) => x.id === item.id); if (c.length) removeFromCart(c[c.length - 1].cartKey); }}
+                                    className="w-9 h-9 rounded-md text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors"
                                   >
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
                                     </svg>
                                   </button>
-                                  <span className="text-xs font-bold text-slate-800 min-w-[14px] text-center">{qty}</span>
+                                  <span className="text-sm font-bold text-slate-800 min-w-[18px] text-center">{qty}</span>
                                   <button
-                                    onClick={() => addToCart(item)}
-                                    className="w-6 h-6 rounded-md bg-teal-500 text-white hover:bg-teal-600 flex items-center justify-center transition-colors"
+                                    onClick={() => handleAddToCartOrPicker(item)}
+                                    className="w-9 h-9 rounded-md bg-teal-500 text-white hover:bg-teal-600 flex items-center justify-center transition-colors"
                                   >
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
                                   </button>
                                 </div>
                               ) : (
                                 <button
-                                  onClick={() => addToCart(item)}
-                                  className="w-7 h-7 rounded-lg bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors"
+                                  onClick={() => handleAddToCartOrPicker(item)}
+                                  className={`flex items-center gap-1.5 rounded-lg bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors ${qty > 0 ? "px-3 py-2 text-xs font-semibold" : "w-10 h-10"}`}
                                 >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                  </svg>
+                                  {item.item_option_groups?.length ? (
+                                    <>
+                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                      </svg>
+                                      {qty > 0 && <span>{qty}</span>}
+                                    </>
+                                  ) : (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                    </svg>
+                                  )}
                                 </button>
                               )}
                             </div>
@@ -303,23 +367,26 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
 
             <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
               {cart.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0">
+                <div key={item.cartKey} className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
+                    {item.options.length > 0 && (
+                      <p className="text-xs text-teal-600 truncate">{item.options.map((o) => o.optionName).join(", ")}</p>
+                    )}
                     <p className="text-xs text-slate-400">{item.price.toFixed(2)} € / unité</p>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button onClick={() => removeFromCart(item.id)} className="w-6 h-6 rounded-md border border-slate-200 flex items-center justify-center text-slate-400 hover:border-slate-300 transition-colors">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => removeFromCart(item.cartKey)} className="w-9 h-9 rounded-md border border-slate-200 flex items-center justify-center text-slate-400 hover:border-slate-300 transition-colors">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
                       </svg>
                     </button>
                     <span className="text-sm font-bold text-slate-800 min-w-[18px] text-center">{item.quantity}</span>
-                    <button onClick={() => {
-                      const menuItem = categories.flatMap(c => c.items).find(i => i.id === item.id);
-                      if (menuItem) addToCart(menuItem);
-                    }} className="w-6 h-6 rounded-md bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <button onClick={() => addToCart(
+                      categories.flatMap(c => c.items).find(i => i.id === item.id)!,
+                      item.options
+                    )} className="w-9 h-9 rounded-md bg-teal-500 hover:bg-teal-600 text-white flex items-center justify-center transition-colors">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
                     </button>
@@ -327,9 +394,52 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
                   </div>
                 </div>
               ))}
+
+              {/* Form inside scroll area on mobile so keyboard doesn't hide it */}
+              <div className="pt-3 space-y-4 sm:hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-700">Total</span>
+                  <span className="text-lg font-bold text-slate-900">{cartTotal.toFixed(2)} €</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600">Numéro de table <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Ex : 5, Terrasse 2…"
+                    value={tableNumber}
+                    onChange={(e) => setTableNumber(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600">Note pour la cuisine <span className="text-slate-400 font-normal">(optionnel)</span></label>
+                  <textarea
+                    placeholder="Sans oignons, allergie noix…"
+                    value={customerNotes}
+                    onChange={(e) => setCustomerNotes(e.target.value)}
+                    rows={2}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+                  />
+                </div>
+
+                {orderStatus === "error" && (
+                  <p className="text-xs text-red-500 text-center">{orderError ?? "Erreur inconnue"}</p>
+                )}
+
+                <button
+                  onClick={handleOrder}
+                  disabled={!tableNumber.trim() || cart.length === 0 || orderStatus === "submitting"}
+                  className="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {orderStatus === "submitting" ? "Envoi en cours…" : `Envoyer la commande — ${cartTotal.toFixed(2)} €`}
+                </button>
+              </div>
             </div>
 
-            <div className="px-5 py-5 space-y-4 border-t border-slate-100">
+            <div className="hidden sm:block px-5 py-5 space-y-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-slate-700">Total</span>
                 <span className="text-lg font-bold text-slate-900">{cartTotal.toFixed(2)} €</span>
@@ -358,7 +468,7 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
               </div>
 
               {orderStatus === "error" && (
-                <p className="text-xs text-red-500 text-center">Une erreur est survenue. Veuillez réessayer.</p>
+                <p className="text-xs text-red-500 text-center">{orderError ?? "Erreur inconnue"}</p>
               )}
 
               <button
@@ -376,6 +486,132 @@ export default function MenuOrderingClient({ restaurant, categories, initialTabl
       <p className="text-center py-5 text-xs text-slate-300">
         Propulsé par <span className="text-slate-400 font-medium">MenuQR Pro</span>
       </p>
+
+      {/* Option picker modal */}
+      {optionPickerItem && (
+        <OptionPickerModal
+          item={optionPickerItem}
+          onConfirm={(opts) => {
+            addToCart(optionPickerItem, opts);
+            setOptionPickerItem(null);
+          }}
+          onClose={() => setOptionPickerItem(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function OptionPickerModal({
+  item,
+  onConfirm,
+  onClose,
+}: {
+  item: MenuItem;
+  onConfirm: (opts: { groupName: string; optionName: string; priceDelta: number }[]) => void;
+  onClose: () => void;
+}) {
+  const [selections, setSelections] = useState<Record<string, string[]>>({});
+
+  const groups = [...(item.item_option_groups ?? [])].sort((a, b) => a.position - b.position);
+
+  function toggleOption(group: { id: string; name: string; multiple: boolean }, optId: string) {
+    setSelections((prev) => {
+      const current = prev[group.id] ?? [];
+      if (group.multiple) {
+        return { ...prev, [group.id]: current.includes(optId) ? current.filter((x) => x !== optId) : [...current, optId] };
+      }
+      return { ...prev, [group.id]: current.includes(optId) ? [] : [optId] };
+    });
+  }
+
+  function canConfirm() {
+    return groups.every((g) => !g.required || (selections[g.id]?.length ?? 0) > 0);
+  }
+
+  function handleConfirm() {
+    const opts: { groupName: string; optionName: string; priceDelta: number }[] = [];
+    for (const group of groups) {
+      for (const optId of selections[group.id] ?? []) {
+        const opt = group.item_options.find((o) => o.id === optId);
+        if (opt) opts.push({ groupName: group.name, optionName: opt.name, priceDelta: Number(opt.price_delta) });
+      }
+    }
+    onConfirm(opts);
+  }
+
+  const totalDelta = groups.flatMap((g) =>
+    (selections[g.id] ?? []).map((optId) => {
+      const opt = g.item_options.find((o) => o.id === optId);
+      return opt ? Number(opt.price_delta) : 0;
+    })
+  ).reduce((s, v) => s + v, 0);
+
+  const finalPrice = (item.price ?? 0) + totalDelta;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl max-h-[85vh] flex flex-col animate-slide-in-bottom">
+        <div className="flex justify-center pt-3">
+          <div className="w-8 h-1 rounded-full bg-slate-200" />
+        </div>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-slate-900">{item.name}</h3>
+            <p className="text-sm text-slate-400 mt-0.5">Choisissez vos options</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {groups.map((group) => (
+            <div key={group.id}>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-sm font-semibold text-slate-800">{group.name}</p>
+                {group.required && <span className="text-xs bg-red-50 text-red-500 border border-red-100 px-1.5 py-0.5 rounded-full">Obligatoire</span>}
+                {group.multiple && <span className="text-xs text-slate-400">Plusieurs choix</span>}
+              </div>
+              <div className="space-y-1.5">
+                {[...group.item_options].sort((a, b) => a.position - b.position).map((opt) => {
+                  const selected = (selections[group.id] ?? []).includes(opt.id);
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => toggleOption(group, opt.id)}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-sm transition-all ${selected ? "border-teal-500 bg-teal-50 text-teal-800" : "border-slate-200 hover:border-slate-300 text-slate-700"}`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? "border-teal-500 bg-teal-500" : "border-slate-300"}`}>
+                          {selected && <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                        </div>
+                        <span>{opt.name}</span>
+                      </div>
+                      <span className={`font-medium text-xs ${Number(opt.price_delta) > 0 ? "text-teal-600" : Number(opt.price_delta) < 0 ? "text-red-500" : "text-slate-400"}`}>
+                        {Number(opt.price_delta) > 0 ? "+" : ""}{Number(opt.price_delta) !== 0 ? `${Number(opt.price_delta).toFixed(2)} €` : "inclus"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-5 py-4 border-t border-slate-100">
+          <button
+            onClick={handleConfirm}
+            disabled={!canConfirm()}
+            className="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Ajouter au panier — {finalPrice.toFixed(2)} €
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
